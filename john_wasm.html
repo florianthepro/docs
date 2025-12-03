@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>John the Ripper – Single-File Web GUI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #fdfdfd; }
+    header { padding: 1rem; border-bottom: 1px solid #ddd; }
+    main { display: grid; grid-template-columns: 340px 1fr; gap: 1rem; padding: 1rem; }
+    .panel { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: #fff; }
+    label { display:block; margin-top: .5rem; font-weight: 600; }
+    input[type="file"], input[type="text"], select, textarea { width: 100%; margin-top: .25rem; padding: .5rem; }
+    textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .row { display:flex; gap:.5rem; align-items:center; margin-top:.5rem; flex-wrap: wrap; }
+    .btn { padding:.5rem .8rem; border:1px solid #888; border-radius:6px; cursor:pointer; background:#eee; }
+    .btn.primary { background:#2e6; border-color:#2e6; color:#073; }
+    .btn.danger { background:#f66; border-color:#f33; color:#500; }
+    .log { background:#111; color:#0f0; padding:.75rem; border-radius:6px; overflow:auto; min-height: 240px; }
+    .muted { color:#666; font-size:.9rem; }
+    .footer { padding: 1rem; border-top: 1px solid #ddd; font-size: .9rem; }
+    code { background:#f6f8fa; padding:.2rem .4rem; border-radius:4px; }
+    pre { margin: .5rem 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>John the Ripper – Browser GUI (Single HTML)</h1>
+    <p class="muted">Läuft vollständig im Browser via WebAssembly. Dateien werden im virtuellen Dateisystem verwaltet.</p>
+  </header>
+
+  <main>
+    <!-- Panels wie gehabt -->
+    <section class="panel">
+      <h2>Eingaben und Optionen</h2>
+      <label for="hashFile">Hash-Datei hochladen</label>
+      <input type="file" id="hashFile" accept=".txt,.hash,.lst,.john,.pot" />
+      <div class="row">
+        <div style="flex:1">
+          <label for="wordlistText">Wordlist (Text, eine Zeile pro Wort)</label>
+          <textarea id="wordlistText" placeholder="Optional: eigene Wordlist einfügen"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <label for="format">Format</label>
+          <input type="text" id="format" placeholder="z. B. raw-MD5, bcrypt, sha256crypt" />
+        </div>
+        <div style="flex:1">
+          <label for="extraArgs">Zusätzliche CLI-Argumente</label>
+          <input type="text" id="extraArgs" placeholder="--rules --mask=?a?a?a?a --incremental" />
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btnRun">Starten</button>
+        <button class="btn" id="btnListFormats">Formate</button>
+        <button class="btn" id="btnShowHelp">Hilfe</button>
+        <button class="btn danger" id="btnClearFS">Virtuelles FS leeren</button>
+      </div>
+      <p class="muted">Hinweis: Hash-Dateien werden unter <code>/work/input.hash</code>, Wordlists unter <code>/work/wordlist.lst</code> gespeichert.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Ausgabe</h2>
+      <div id="output" class="log" aria-live="polite"></div>
+      <h3>Aktueller Befehl</h3>
+      <pre id="currentCmd"><code>-</code></pre>
+    </section>
+  </main>
+
+  <div class="footer">
+    <span>Konfiguration: optional inline. Ergebnisse und Pot-Datei entstehen in <code>/work</code>.</span>
+  </div>
+
+  <!-- Loader für john_wasm_code.txt -->
+  <script>
+    let wasmBase64 = null;
+
+    async function loadWasmBase64() {
+      try {
+        const resp = await fetch("john_wasm_code.txt");
+        const text = await resp.text();
+        // Extrahiere den Base64-String aus der Datei
+        const match = text.match(/const wasmBase64 = '([^']+)'/);
+        if (match) {
+          wasmBase64 = match[1];
+          console.log("WASM Base64 geladen, Länge:", wasmBase64.length);
+          initModule();
+        } else {
+          console.error("Kein Base64-String in john_wasm_code.txt gefunden.");
+        }
+      } catch (e) {
+        console.error("Fehler beim Laden von john_wasm_code.txt:", e);
+      }
+    }
+
+    function base64ToUint8Array(b64) {
+      const bin = atob(b64);
+      const len = bin.length;
+      const bytes = new Uint8Array(len);
+      for (let i=0; i<len; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    let Module = {
+      print: (text) => log(text),
+      printErr: (text) => log('[ERR] ' + text),
+      noInitialRun: true,
+      thisProgram: 'john',
+      arguments: [],
+    };
+
+    const outputEl = document.getElementById('output');
+    const currentCmdEl = document.getElementById('currentCmd').querySelector('code');
+    function log(line) {
+      outputEl.textContent += (line.endsWith('\n') ? line : (line + '\n'));
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+    function setCmd(cmd) {
+      currentCmdEl.textContent = cmd;
+    }
+
+    async function initModule() {
+      if (!wasmBase64) {
+        log("WASM Base64 fehlt.");
+        return;
+      }
+      log("Lade WebAssembly...");
+      const wasmBytes = base64ToUint8Array(wasmBase64);
+      Module.wasmBinary = wasmBytes;
+      if (!Module.FS) {
+        log("Fehlende FS-API: Bitte den Emscripten-Glue inline einbetten.");
+        return;
+      }
+      Module.FS.mkdir('/work');
+      Module.FS.chdir('/work');
+      log("Modul initialisiert.");
+    }
+
+    // Restliche UI-Events und Funktionen wie gehabt...
+    // (btnRun, btnList, btnHelp, btnClear etc.)
+
+    // Start: lade john_wasm_code.txt
+    loadWasmBase64();
+  </script>
+</body>
+</html>
