@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Structure.json Editor</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    h1 { margin-top: 0; }
+    .toolbar { margin: 10px 0 20px; }
+    .toolbar button { margin-right: 8px; }
+    .block { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+    .kategorie, .lang { margin: 5px 0; padding-left: 10px; }
+    .kategorie { border-left: 3px solid #e6e6e6; }
+    .lang { border-left: 3px solid #f2f2f2; }
+    input[type="text"] { width: 320px; max-width: 100%; }
+    textarea { width: 100%; height: 240px; font-family: monospace; }
+    .small { font-size: 12px; color: #666; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .right { float: right; }
+  </style>
+</head>
+<body>
+  <h1>Structure.json Editor</h1>
+
+  <div class="toolbar">
+    <button onclick="addThema()">+ Thema hinzufügen</button>
+    <span class="small">Bearbeite die Struktur unten. Speichere oder exportiere, um später weiterzuarbeiten.</span>
+  </div>
+
+  <div id="editor"></div>
+
+  <hr />
+
+  <div class="toolbar">
+    <button onclick="generateJSON()">JSON generieren</button>
+    <button onclick="copyJSON()">JSON kopieren</button>
+    <button onclick="saveStructure()">Struktur speichern (LocalStorage)</button>
+    <button onclick="loadStructure()">Struktur laden (LocalStorage)</button>
+    <button onclick="exportJSON()">Als Datei exportieren</button>
+    <label class="row">
+      <input type="file" id="importFile" accept="application/json" onchange="importJSON(event)" />
+      <span class="small">JSON-Datei importieren</span>
+    </label>
+  </div>
+
+  <textarea id="output" readonly></textarea>
+
+  <script>
+    let structure = {};
+
+    // Beim Laden: aus LocalStorage holen, sonst Beispiel setzen
+    window.onload = () => {
+      const saved = localStorage.getItem("structure");
+      if (saved) {
+        try {
+          structure = JSON.parse(saved);
+        } catch (e) {
+          console.warn("Gespeicherte Struktur ungültig, verwende Beispiel.", e);
+          setExample();
+        }
+      } else {
+        setExample();
+      }
+      render();
+    };
+
+    function setExample() {
+      structure = {
+        "thema1": {
+          "kategorieA": { "de": "manual/thema1/kategorieA/de.md" }
+        }
+      };
+    }
+
+    // Render-Funktion
+    function render() {
+      const editor = document.getElementById("editor");
+      editor.innerHTML = "";
+
+      const entries = Object.entries(structure);
+      if (entries.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "small";
+        empty.textContent = "Noch keine Themen. Klicke auf „+ Thema hinzufügen“.";
+        editor.appendChild(empty);
+        return;
+      }
+
+      entries.forEach(([thema, cats]) => {
+        const themaDiv = document.createElement("div");
+        themaDiv.className = "block";
+        themaDiv.innerHTML = `
+          <div class="row">
+            <strong>Thema:</strong>
+            <input type="text" value="${escapeHTML(thema)}" onchange="renameThema('${escapeAttr(thema)}', this.value)">
+            <button onclick="removeThema('${escapeAttr(thema)}')">Entfernen</button>
+            <button onclick="addKategorie('${escapeAttr(thema)}')">+ Kategorie</button>
+          </div>
+        `;
+
+        Object.entries(cats).forEach(([cat, langs]) => {
+          const catDiv = document.createElement("div");
+          catDiv.className = "kategorie";
+          catDiv.innerHTML = `
+            <div class="row">
+              <strong>Kategorie:</strong>
+              <input type="text" value="${escapeHTML(cat)}" onchange="renameKategorie('${escapeAttr(thema)}','${escapeAttr(cat)}',this.value)">
+              <button onclick="removeKategorie('${escapeAttr(thema)}','${escapeAttr(cat)}')">Entfernen</button>
+              <button onclick="addLang('${escapeAttr(thema)}','${escapeAttr(cat)}')">+ Sprache</button>
+            </div>
+          `;
+
+          Object.entries(langs).forEach(([lang, path]) => {
+            const langDiv = document.createElement("div");
+            langDiv.className = "lang";
+            langDiv.innerHTML = `
+              <div class="row">
+                <strong>Sprache:</strong>
+                <input type="text" value="${escapeHTML(lang)}" onchange="renameLang('${escapeAttr(thema)}','${escapeAttr(cat)}','${escapeAttr(lang)}',this.value)">
+                <strong>Pfad:</strong>
+                <input type="text" value="${escapeHTML(path)}" onchange="updatePath('${escapeAttr(thema)}','${escapeAttr(cat)}','${escapeAttr(lang)}',this.value)">
+                <button onclick="removeLang('${escapeAttr(thema)}','${escapeAttr(cat)}','${escapeAttr(lang)}')">Entfernen</button>
+              </div>
+            `;
+            catDiv.appendChild(langDiv);
+          });
+
+          themaDiv.appendChild(catDiv);
+        });
+
+        editor.appendChild(themaDiv);
+      });
+    }
+
+    // Aktionen für Themen
+    function addThema() {
+      const name = prompt("Neues Thema:");
+      if (!name) return;
+      if (structure[name]) {
+        alert("Thema existiert bereits.");
+        return;
+      }
+      structure[name] = {};
+      render();
+      autoSave();
+    }
+    function removeThema(thema) {
+      if (!confirm(`Thema „${thema}“ wirklich entfernen?`)) return;
+      delete structure[thema];
+      render();
+      autoSave();
+    }
+    function renameThema(oldName, newName) {
+      const trimmed = (newName || "").trim();
+      if (!trimmed) return;
+      if (trimmed === oldName) return;
+      if (structure[trimmed]) {
+        alert("Ein Thema mit diesem Namen existiert bereits.");
+        return;
+      }
+      structure[trimmed] = structure[oldName];
+      delete structure[oldName];
+      render();
+      autoSave();
+    }
+
+    // Aktionen für Kategorien
+    function addKategorie(thema) {
+      const name = prompt(`Neue Kategorie für „${thema}“:`);
+      if (!name) return;
+      if (!structure[thema]) return;
+      if (structure[thema][name]) {
+        alert("Kategorie existiert bereits.");
+        return;
+      }
+      structure[thema][name] = {};
+      render();
+      autoSave();
+    }
+    function removeKategorie(thema, cat) {
+      if (!confirm(`Kategorie „${cat}“ aus „${thema}“ entfernen?`)) return;
+      delete structure[thema][cat];
+      render();
+      autoSave();
+    }
+    function renameKategorie(thema, oldCat, newCat) {
+      const trimmed = (newCat || "").trim();
+      if (!trimmed) return;
+      if (trimmed === oldCat) return;
+      if (structure[thema][trimmed]) {
+        alert("Eine Kategorie mit diesem Namen existiert bereits.");
+        return;
+      }
+      structure[thema][trimmed] = structure[thema][oldCat];
+      delete structure[thema][oldCat];
+      render();
+      autoSave();
+    }
+
+    // Aktionen für Sprachen
+    function addLang(thema, cat) {
+      const lang = prompt(`Sprachkürzel (z. B. de, en, fr) für „${cat}“:`);
+      const path = prompt("Pfad (z. B. manual/thema/kategorie/de.md):");
+      if (!lang || !path) return;
+      if (!structure[thema] || !structure[thema][cat]) return;
+      if (structure[thema][cat][lang]) {
+        alert("Sprache existiert bereits in dieser Kategorie.");
+        return;
+      }
+      structure[thema][cat][lang] = path;
+      render();
+      autoSave();
+    }
+    function removeLang(thema, cat, lang) {
+      if (!confirm(`Sprache „${lang}“ aus „${cat}“ entfernen?`)) return;
+      delete structure[thema][cat][lang];
+      render();
+      autoSave();
+    }
+    function renameLang(thema, cat, oldLang, newLang) {
+      const trimmed = (newLang || "").trim();
+      if (!trimmed) return;
+      if (trimmed === oldLang) return;
+      if (structure[thema][cat][trimmed]) {
+        alert("Eine Sprache mit diesem Kürzel existiert bereits.");
+        return;
+      }
+      structure[thema][cat][trimmed] = structure[thema][cat][oldLang];
+      delete structure[thema][cat][oldLang];
+      render();
+      autoSave();
+    }
+    function updatePath(thema, cat, lang, newPath) {
+      structure[thema][cat][lang] = newPath;
+      autoSave();
+    }
+
+    // JSON-Ausgabe und Kopieren
+    function generateJSON() {
+      document.getElementById("output").value = JSON.stringify(structure, null, 2);
+    }
+    function copyJSON() {
+      const text = document.getElementById("output").value || JSON.stringify(structure, null, 2);
+      navigator.clipboard.writeText(text)
+        .then(() => alert("JSON kopiert!"))
+        .catch(() => alert("Kopieren fehlgeschlagen."));
+    }
+
+    // LocalStorage
+    function saveStructure() {
+      localStorage.setItem("structure", JSON.stringify(structure));
+      alert("Struktur im Browser gespeichert.");
+    }
+    function loadStructure() {
+      const saved = localStorage.getItem("structure");
+      if (saved) {
+        try {
+          structure = JSON.parse(saved);
+          render();
+          alert("Struktur aus dem Browser geladen.");
+        } catch (e) {
+          alert("Gespeicherte Struktur ist ungültig.");
+        }
+      } else {
+        alert("Keine gespeicherte Struktur gefunden.");
+      }
+    }
+    function autoSave() {
+      // still und leise automatisch sichern
+      try {
+        localStorage.setItem("structure", JSON.stringify(structure));
+      } catch (e) {
+        console.warn("Autosave fehlgeschlagen.", e);
+      }
+    }
+
+    // Datei-Export/Import
+    function exportJSON() {
+      const data = JSON.stringify(structure, null, 2);
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      a.download = `structure-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    function importJSON(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const obj = JSON.parse(e.target.result);
+          if (!isPlainObject(obj)) {
+            alert("Die Datei enthält kein gültiges Struktur-Objekt.");
+            return;
+          }
+          structure = obj;
+          render();
+          saveStructure();
+          alert("JSON importiert und gespeichert.");
+        } catch (err) {
+          alert("Ungültige JSON-Datei.");
+        }
+      };
+      reader.readAsText(file, "utf-8");
+      // Reset input, damit die gleiche Datei erneut importiert werden kann
+      event.target.value = "";
+    }
+
+    // Hilfsfunktionen
+    function isPlainObject(x) {
+      return x && typeof x === "object" && !Array.isArray(x);
+    }
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function escapeAttr(str) {
+      // Für sichere Einbettung in Onclick/Onchange-Attribute
+      return String(str).replace(/'/g, "\\'");
+    }
+  </script>
+</body>
+</html>
