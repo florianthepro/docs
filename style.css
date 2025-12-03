@@ -19,12 +19,17 @@ li {
   margin: 5px 0;
 }
 
-li a {
+li.folder {
+  font-weight: bold;
+  color: #444;
+}
+
+li.file a {
   text-decoration: none;
   color: #007acc;
 }
 
-li a:hover {
+li.file a:hover {
   text-decoration: underline;
 }
 
