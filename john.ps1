@@ -1,18 +1,25 @@
-# Pfad zur Eingabedatei (john.wasm)
-$InputFile  = "C:\Pfad\zu\john.wasm"
+# Eingabedateien
+$HtmlInput   = "C:\Pfad\zu\deiner\john.html"   # deine vorhandene HTML
+$WasmInput   = "C:\Pfad\zu\john.wasm"         # die kompilierte john.wasm
 
-# Pfad zum Downloads-Ordner des aktuellen Benutzers
-$Downloads  = [Environment]::GetFolderPath("UserProfile") + "\Downloads"
+# Ziel: Downloads-Ordner des aktuellen Benutzers
+$Downloads   = [Environment]::GetFolderPath("UserProfile") + "\Downloads"
+$HtmlOutput  = Join-Path $Downloads "john.html"
 
-# Ausgabedatei im Downloads-Ordner
-$OutputFile = Join-Path $Downloads "john.wasm.b64"
+Write-Host "Lese $WasmInput und konvertiere nach Base64..."
 
-Write-Host "Konvertiere $InputFile nach Base64..."
+# john.wasm einlesen und nach Base64 konvertieren
+$Base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($WasmInput))
 
-# Datei einlesen und nach Base64 konvertieren
-$Base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($InputFile))
+Write-Host "Ersetze Platzhalter BASE64_WASM_DATA in $HtmlInput..."
+
+# HTML einlesen
+$HtmlContent = Get-Content -Raw -Path $HtmlInput
+
+# Platzhalter ersetzen
+$HtmlContent = $HtmlContent -replace "BASE64_WASM_DATA", $Base64
 
 # Ergebnis speichern
-Set-Content -Path $OutputFile -Value $Base64
+Set-Content -Path $HtmlOutput -Value $HtmlContent
 
-Write-Host "Fertig! Ergebnis gespeichert unter: $OutputFile"
+Write-Host "Fertig! Neue Datei gespeichert unter: $HtmlOutput"
