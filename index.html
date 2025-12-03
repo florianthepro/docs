@@ -1,48 +1,69 @@
-<?php
-// Pfad relativ zu dieser index.php ("" = aktuelles Verzeichnis)
-$path = __DIR__;
-
-// Welche Einträge ausblenden?
-$ignore = ['.', '..', 'index.php']; // index selbst ausblenden
-
-// Dateien/Ordner einlesen
-$entries = scandir($path);
-
-// Nur Dateien (optional Ordner mit aufnehmen)
-$files = array_filter($entries, function ($item) use ($path, $ignore) {
-    if (in_array($item, $ignore)) return false;
-    $full = $path . DIRECTORY_SEPARATOR . $item;
-    return is_file($full); // für Ordner: is_dir($full)
-});
-
-// Optional: Sortierung (A–Z)
-natcasesort($files);
-
-?><!doctype html>
+<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Verzeichnis-Listing</title>
+  <title>Automatisches Verzeichnis-Listing</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body{font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto;}
-    .container{max-width:800px;margin:40px auto;padding:0 16px;}
-    ul{list-style:none;padding:0;margin:16px 0;}
-    li{padding:8px 0;border-bottom:1px solid #eee;}
-    a{text-decoration:none;color:#0366d6}
+    .container{max-width:900px;margin:40px auto;padding:0 16px;}
+    table{width:100%;border-collapse:collapse}
+    th, td{padding:10px;border-bottom:1px solid #eee;text-align:left}
+    th{background:#fafafa}
+    a{color:#0366d6;text-decoration:none}
     a:hover{text-decoration:underline}
+    .meta{color:#555}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Dateien in diesem Ordner</h1>
-    <ul>
-      <?php foreach ($files as $file): ?>
-        <li>
-          <a href="<?= htmlspecialchars($file, ENT_QUOTES) ?>" download><?= htmlspecialchars($file, ENT_QUOTES) ?></a>
-        </li>
-      <?php endforeach; ?>
-    </ul>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Größe</th>
+          <th>Geändert am</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php
+        $path = __DIR__;
+        $ignore = ['.', '..', 'index.html'];
+        $entries = scandir($path);
+
+        $files = array_filter($entries, function ($item) use ($path, $ignore) {
+            if (in_array($item, $ignore)) return false;
+            return is_file($path . DIRECTORY_SEPARATOR . $item);
+        });
+
+        usort($files, function ($a, $b) use ($path) {
+            return filemtime($path . DIRECTORY_SEPARATOR . $b) <=> filemtime($path . DIRECTORY_SEPARATOR . $a);
+        });
+
+        function formatBytes($bytes, $precision = 1) {
+            $units = ['B','KB','MB','GB','TB'];
+            $i = 0;
+            while ($bytes >= 1024 && $i < count($units)-1) {
+                $bytes /= 1024;
+                $i++;
+            }
+            return round($bytes, $precision) . ' ' . $units[$i];
+        }
+
+        foreach ($files as $file) {
+            $full = $path . DIRECTORY_SEPARATOR . $file;
+            $size = filesize($full);
+            $mtime = filemtime($full);
+            echo "<tr>
+                    <td><a href='".htmlspecialchars($file, ENT_QUOTES)."'>".htmlspecialchars($file, ENT_QUOTES)."</a></td>
+                    <td class='meta'>".formatBytes($size)."</td>
+                    <td class='meta'>".date('d.m.Y H:i', $mtime)."</td>
+                  </tr>";
+        }
+        ?>
+      </tbody>
+    </table>
   </div>
 </body>
 </html>
