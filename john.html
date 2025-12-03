@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>John the Ripper – Single-File Web GUI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #fdfdfd; }
+    header { padding: 1rem; border-bottom: 1px solid #ddd; }
+    main { display: grid; grid-template-columns: 340px 1fr; gap: 1rem; padding: 1rem; }
+    .panel { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: #fff; }
+    label { display:block; margin-top: .5rem; font-weight: 600; }
+    input[type="file"], input[type="text"], select, textarea { width: 100%; margin-top: .25rem; padding: .5rem; }
+    textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .row { display:flex; gap:.5rem; align-items:center; margin-top:.5rem; flex-wrap: wrap; }
+    .btn { padding:.5rem .8rem; border:1px solid #888; border-radius:6px; cursor:pointer; background:#eee; }
+    .btn.primary { background:#2e6; border-color:#2e6; color:#073; }
+    .btn.danger { background:#f66; border-color:#f33; color:#500; }
+    .log { background:#111; color:#0f0; padding:.75rem; border-radius:6px; overflow:auto; min-height: 240px; }
+    .muted { color:#666; font-size:.9rem; }
+    .footer { padding: 1rem; border-top: 1px solid #ddd; font-size: .9rem; }
+    code { background:#f6f8fa; padding:.2rem .4rem; border-radius:4px; }
+    pre { margin: .5rem 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>John the Ripper – Browser GUI (Single HTML)</h1>
+    <p class="muted">Läuft vollständig im Browser via WebAssembly. Dateien werden im virtuellen Dateisystem verwaltet.</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Eingaben und Optionen</h2>
+
+      <label for="hashFile">Hash-Datei hochladen</label>
+      <input type="file" id="hashFile" accept=".txt,.hash,.lst,.john,.pot" />
+
+      <div class="row">
+        <div style="flex:1">
+          <label for="wordlistText">Wordlist (Text, eine Zeile pro Wort)</label>
+          <textarea id="wordlistText" placeholder="Optional: eigene Wordlist einfügen"></textarea>
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label for="format">Format</label>
+          <input type="text" id="format" placeholder="z. B. raw-MD5, bcrypt, sha256crypt" />
+        </div>
+        <div style="flex:1">
+          <label for="extraArgs">Zusätzliche CLI-Argumente</label>
+          <input type="text" id="extraArgs" placeholder="--rules --mask=?a?a?a?a --incremental" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn primary" id="btnRun">Starten</button>
+        <button class="btn" id="btnListFormats">Formate</button>
+        <button class="btn" id="btnShowHelp">Hilfe</button>
+        <button class="btn danger" id="btnClearFS">Virtuelles FS leeren</button>
+      </div>
+
+      <p class="muted">Hinweis: Hash-Dateien werden unter <code>/work/input.hash</code>, Wordlists unter <code>/work/wordlist.lst</code> gespeichert.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Ausgabe</h2>
+      <div id="output" class="log" aria-live="polite"></div>
+
+      <h3>Aktueller Befehl</h3>
+      <pre id="currentCmd"><code>-</code></pre>
+    </section>
+  </main>
+
+  <div class="footer">
+    <span>Konfiguration: optional inline. Ergebnisse und Pot-Datei entstehen in <code>/work</code>.</span>
+  </div>
+
+  <script>
+    // ============================================================
+    // Single-file Emscripten/WASM-Loader (ohne externe Dateien)
+    // Ersetze BASE64_WASM_DATA durch deine echte john.wasm Base64.
+    // ============================================================
+    const wasmBase64 = 'BASE64_WASM_DATA'; // <-- HIER die echte Base64 der john.wasm einfügen
+    // Optional: Wenn dein Emscripten-Build zusätzliche JS-Glue braucht,
+    // kannst du ihn hier als String einbetten und dynamisch ausführen.
+
+    // Utility: Base64 nach Uint8Array
+    function base64ToUint8Array(b64) {
+      const bin = atob(b64);
+      const len = bin.length;
+      const bytes = new Uint8Array(len);
+      for (let i=0; i<len; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    // Minimaler Emscripten-ähnlicher Module-Wrapper
+    // Hinweis: Ein echter JtR-Emscripten-Build erzeugt üblicherweise
+    // eine JS-Datei (Glue), die Module.callMain bereitstellt.
+    // Hier wird angenommen, dass du diesen Glue inline ergänzt
+    // oder dein Build so konfigurierst, dass callMain verfügbar ist.
+    let Module = {
+      print: (text) => log(text),
+      printErr: (text) => log('[ERR] ' + text),
+      noInitialRun: true,
+      thisProgram: 'john',
+      arguments: [],
+    };
+
+    // Output-Handling
+    const outputEl = document.getElementById('output');
+    const currentCmdEl = document.getElementById('currentCmd').querySelector('code');
+    function log(line) {
+      outputEl.textContent += (line.endsWith('\n') ? line : (line + '\n'));
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+    function setCmd(cmd) {
+      currentCmdEl.textContent = cmd;
+    }
+
+    // Virtuelles FS: einfacher MEMFS über Emscripten-FS-API
+    // Der folgende Block erwartet, dass der Emscripten-Glue FS bereitstellt.
+    async function initModule() {
+      log('Lade WebAssembly...');
+      const wasmBytes = base64ToUint8Array(wasmBase64);
+
+      // Wenn dein Build eine Funktion "createJohnModule" oder "Module" init braucht,
+      // binde sie hier ein. Wir instantiaten generisch:
+      // Achtung: In der Praxis nutzt man den von Emscripten generierten JS-Glue.
+      // Dieser Dummy zeigt den Weg. Ersetze ihn durch deinen Glue.
+      const env = {
+        // Fülle bei Bedarf WASI/Env-Funktionen. Emscripten übernimmt das normal.
+      };
+
+      // Platzhalter: In echten Builds wird Emscripten's JS-Glue diese Instanzierung übernehmen.
+      // Hier rufen wir keine Roh-WebAssembly.instantiate auf, weil JtR komplexe RTTI/Support braucht.
+      // Stattdessen: Führe deinen generierten JS-Glue hier aus und übergib wasmBytes via Module.wasmBinary.
+      Module.wasmBinary = wasmBytes;
+
+      // Falls dein Glue eine Promise zurückgibt:
+      // Module = await createJohnModule({ print, printErr, wasmBinary: wasmBytes, noInitialRun: true });
+
+      // Nach Initialisierung: FS vorbereiten
+      if (!Module.FS) {
+        log('Fehlende FS-API: Bitte den Emscripten-Glue in diese Datei einbetten.');
+        return;
+      }
+
+      Module.FS.mkdir('/work');
+      Module.FS.chdir('/work');
+
+      log('Modul initialisiert. Du kannst nun Hash-Dateien laden und starten.');
+    }
+
+    // Datei ins FS schreiben
+    async function writeHashFileToFS(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      Module.FS.writeFile('/work/input.hash', uint8);
+      log(`Hash-Datei geschrieben: /work/input.hash (${file.name}, ${file.size} Bytes)`);
+    }
+
+    // Wordlist aus Textfeld ins FS spiegeln
+    function writeWordlistFromText(text) {
+      if (!text || !text.trim()) return null;
+      const target = '/work/wordlist.lst';
+      Module.FS.writeFile(target, text);
+      log('Wordlist gespiegelt: ' + target);
+      return target;
+    }
+
+    // Argumente bauen
+    function buildArgs({ format, wordlist, extra }) {
+      const args = [];
+      args.push('john', '/work/input.hash');
+      if (format && format.trim()) args.push('--format=' + format.trim());
+      if (wordlist) args.push('--wordlist=' + wordlist);
+      if (extra && extra.trim()) args.push(...extra.trim().split(/\s+/));
+      return args;
+    }
+
+    // John ausführen
+    async function runJohn(args) {
+      setCmd(args.join(' '));
+      log('Starte: ' + args.join(' '));
+      try {
+        if (!Module.callMain) {
+          log('Fehlt: Module.callMain. Bitte den Emscripten-Glue inline einbetten.');
+          return;
+        }
+        Module.callMain(args);
+        log('Fertig.');
+      } catch (e) {
+        log('Ausführung fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    // UI-Events
+    const hashFileInput = document.getElementById('hashFile');
+    const btnRun = document.getElementById('btnRun');
+    const btnList = document.getElementById('btnListFormats');
+    const btnHelp = document.getElementById('btnShowHelp');
+    const btnClear = document.getElementById('btnClearFS');
+    const wordlistText = document.getElementById('wordlistText');
+    const formatInp = document.getElementById('format');
+    const extraArgsInp = document.getElementById('extraArgs');
+
+    hashFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await writeHashFileToFS(file);
+    });
+
+    btnRun.addEventListener('click', async () => {
+      const file = hashFileInput.files?.[0];
+      if (!file) {
+        log('Bitte eine Hash-Datei hochladen.');
+        return;
+      }
+      await writeHashFileToFS(file);
+      const wordlistPath = writeWordlistFromText(wordlistText.value);
+      const args = buildArgs({
+        format: formatInp.value,
+        wordlist: wordlistPath,
+        extra: extraArgsInp.value,
+      });
+      await runJohn(args);
+    });
+
+    btnList.addEventListener('click', async () => {
+      const args = ['john', '--list=formats'];
+      await runJohn(args);
+    });
+
+    btnHelp.addEventListener('click', async () => {
+      const args = ['john', '--help'];
+      await runJohn(args);
+    });
+
+    btnClear.addEventListener('click', () => {
+      try {
+        const files = Module.FS.readdir('/work').filter(f => f !== '.' && f !== '..');
+        for (const f of files) {
+          const path = '/work/' + f;
+          try {
+            const stat = Module.FS.stat(path);
+            if (stat.isDir) {
+              log('Ordner im work ignoriert: ' + path);
+            } else {
+              Module.FS.unlink(path);
+            }
+          } catch {}
+        }
+        log('Virtuelles Dateisystem bereinigt.');
+      } catch (e) {
+        log('Fehler beim Bereinigen: ' + e.message);
+      }
+    });
+
+    // Start
+    (async () => {
+      await initModule();
+    })();
+  </script>
+
+  <!--
+    WICHTIG:
+    1) Kompiliere openwall/john mit Emscripten zu john.wasm und dem zugehörigen JS-Glue.
+    2) Base64-kodiere john.wasm und setze sie in wasmBase64 oben ein.
+    3) Füge den Emscripten-JS-Glue (der üblicherweise Module, FS, callMain etc. bereitstellt)
+       direkt hier als <script> ein oder als String und eval()—damit alles in einer HTML-Datei bleibt.
+    4) Danach kannst du diese eine john.html als GitHub Page verwenden.
+  -->
+</body>
+</html>
