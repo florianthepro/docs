@@ -1,19 +1,48 @@
-<!DOCTYPE html>
+<?php
+// Pfad relativ zu dieser index.php ("" = aktuelles Verzeichnis)
+$path = __DIR__;
+
+// Welche Einträge ausblenden?
+$ignore = ['.', '..', 'index.php']; // index selbst ausblenden
+
+// Dateien/Ordner einlesen
+$entries = scandir($path);
+
+// Nur Dateien (optional Ordner mit aufnehmen)
+$files = array_filter($entries, function ($item) use ($path, $ignore) {
+    if (in_array($item, $ignore)) return false;
+    $full = $path . DIRECTORY_SEPARATOR . $item;
+    return is_file($full); // für Ordner: is_dir($full)
+});
+
+// Optional: Sortierung (A–Z)
+natcasesort($files);
+
+?><!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Dateiverzeichnis</title>
+  <meta charset="utf-8">
+  <title>Verzeichnis-Listing</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto;}
+    .container{max-width:800px;margin:40px auto;padding:0 16px;}
+    ul{list-style:none;padding:0;margin:16px 0;}
+    li{padding:8px 0;border-bottom:1px solid #eee;}
+    a{text-decoration:none;color:#0366d6}
+    a:hover{text-decoration:underline}
+  </style>
 </head>
 <body>
-  <h1>Dateiverzeichnis</h1>
-  <ul>
-    <?php
-      foreach (scandir(".") as $file) {
-        if ($file != "." && $file != ".." && $file != "index.html") {
-          echo "<li><a href='$file'>$file</a></li>";
-        }
-      }
-    ?>
-  </ul>
+  <div class="container">
+    <h1>Dateien in diesem Ordner</h1>
+    <ul>
+      <?php foreach ($files as $file): ?>
+        <li>
+          <a href="<?= htmlspecialchars($file, ENT_QUOTES) ?>" download><?= htmlspecialchars($file, ENT_QUOTES) ?></a>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
 </body>
 </html>
