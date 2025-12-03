@@ -1,69 +1,105 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <title>Automatisches Verzeichnis-Listing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body{font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto;}
-    .container{max-width:900px;margin:40px auto;padding:0 16px;}
-    table{width:100%;border-collapse:collapse}
-    th, td{padding:10px;border-bottom:1px solid #eee;text-align:left}
-    th{background:#fafafa}
-    a{color:#0366d6;text-decoration:none}
-    a:hover{text-decoration:underline}
-    .meta{color:#555}
-  </style>
+    <meta charset="UTF-8">
+    <title>Verzeichnis-Listing</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 8px 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #555; color: #fff; cursor: pointer; }
+        tr:hover { background: #f1f1f1; }
+        .size { text-align: right; }
+        .date { color: #666; }
+        .pagination { margin-top: 20px; }
+        .pagination a { margin: 0 5px; text-decoration: none; color: #007BFF; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Dateien in diesem Ordner</h1>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Größe</th>
-          <th>Geändert am</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php
-        $path = __DIR__;
-        $ignore = ['.', '..', 'index.html'];
-        $entries = scandir($path);
+    <h1>Verzeichnis-Listing</h1>
+    <?php
+    // ⚙️ Konfiguration
+    $exclude = ['index.html', 'index.php']; // Dateien, die nicht angezeigt werden sollen
+    $itemsPerPage = 50; // Anzahl pro Seite
 
-        $files = array_filter($entries, function ($item) use ($path, $ignore) {
-            if (in_array($item, $ignore)) return false;
-            return is_file($path . DIRECTORY_SEPARATOR . $item);
-        });
+    // Hilfsfunktion: Dateigröße formatieren
+    function formatSize($bytes) {
+        if ($bytes >= 1073741824) return number_format($bytes / 1073741824, 2) . ' GB';
+        elseif ($bytes >= 1048576) return number_format($bytes / 1048576, 2) . ' MB';
+        elseif ($bytes >= 1024) return number_format($bytes / 1024, 2) . ' KB';
+        elseif ($bytes > 1) return $bytes . ' Bytes';
+        elseif ($bytes == 1) return $bytes . ' Byte';
+        else return '0 Bytes';
+    }
 
-        usort($files, function ($a, $b) use ($path) {
-            return filemtime($path . DIRECTORY_SEPARATOR . $b) <=> filemtime($path . DIRECTORY_SEPARATOR . $a);
-        });
-
-        function formatBytes($bytes, $precision = 1) {
-            $units = ['B','KB','MB','GB','TB'];
-            $i = 0;
-            while ($bytes >= 1024 && $i < count($units)-1) {
-                $bytes /= 1024;
-                $i++;
-            }
-            return round($bytes, $precision) . ' ' . $units[$i];
-        }
-
+    // Rekursive Funktion: Dateien sammeln
+    function listFiles($dir, $exclude) {
+        $result = [];
+        $files = scandir($dir);
         foreach ($files as $file) {
-            $full = $path . DIRECTORY_SEPARATOR . $file;
-            $size = filesize($full);
-            $mtime = filemtime($full);
-            echo "<tr>
-                    <td><a href='".htmlspecialchars($file, ENT_QUOTES)."'>".htmlspecialchars($file, ENT_QUOTES)."</a></td>
-                    <td class='meta'>".formatBytes($size)."</td>
-                    <td class='meta'>".date('d.m.Y H:i', $mtime)."</td>
-                  </tr>";
+            if ($file === '.' || $file === '..' || in_array($file, $exclude)) continue;
+            $path = $dir . DIRECTORY_SEPARATOR . $file;
+            if (is_dir($path)) {
+                $result = array_merge($result, listFiles($path, $exclude));
+            } else {
+                $result[] = [
+                    'name' => $file,
+                    'path' => $path,
+                    'size' => filesize($path),
+                    'date' => filemtime($path)
+                ];
+            }
         }
-        ?>
-      </tbody>
-    </table>
-  </div>
+        return $result;
+    }
+
+    // Dateien sammeln
+    $files = listFiles(__DIR__, $exclude);
+
+    // Sortierung (Standard: Name)
+    $sort = $_GET['sort'] ?? 'name';
+    usort($files, function($a, $b) use ($sort) {
+        return $a[$sort] <=> $b[$sort];
+    });
+
+    // Paginierung
+    $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $totalPages = ceil(count($files) / $itemsPerPage);
+    $start = ($page - 1) * $itemsPerPage;
+    $pagedFiles = array_slice($files, $start, $itemsPerPage);
+
+    // Tabelle ausgeben
+    echo "<table>";
+    echo "<tr>
+            <th><a href='?sort=name'>Dateiname</a></th>
+            <th class='size'><a href='?sort=size'>Größe</a></th>
+            <th><a href='?sort=date'>Letzte Änderung</a></th>
+          </tr>";
+    foreach ($pagedFiles as $f) {
+        $name = htmlspecialchars($f['name']);
+        $size = formatSize($f['size']);
+        $date = date("d.m.Y H:i:s", $f['date']);
+        echo "<tr>
+                <td><a href='{$f['path']}' target='_blank'>{$name}</a></td>
+                <td class='size'>{$size}</td>
+                <td class='date'>{$date}</td>
+              </tr>";
+    }
+    echo "</table>";
+
+    // Paginierung anzeigen
+    if ($totalPages > 1) {
+        echo "<div class='pagination'>Seite: ";
+        for ($i = 1; $i <= $totalPages; $i++) {
+            if ($i == $page) {
+                echo "<strong>$i</strong> ";
+            } else {
+                echo "<a href='?page=$i&sort=$sort'>$i</a> ";
+            }
+        }
+        echo "</div>";
+    }
+    ?>
 </body>
 </html>
