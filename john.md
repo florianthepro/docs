@@ -3,3 +3,5 @@ Ersetze nur den Platzhalter BASE64_WASM_DATA durch die echte Base64-kodierte joh
 sh ausfüren in wsl
 
 dann in windows ps1 ausfüren
+
+uploud
