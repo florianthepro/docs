@@ -41,7 +41,7 @@ async function renderDirectory(repo, path = "") {
 }
 
 async function loadFiles() {
-  const repo = "USERNAME/REPOSITORY"; // 👉 anpassen
+  const repo = "florianthepro/docs"; // 👉 anpassen
   const html = await renderDirectory(repo);
   document.getElementById("file-list").innerHTML = html;
 }
