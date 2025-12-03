@@ -1,0 +1,117 @@
+<?php
+if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === "off") {
+    $redirect = "https://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    header("Location: $redirect", true, 301);
+    exit();
+}
+?>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zeitrechner</title>
+  <link rel="icon" type="image/svg" href=".Zeitrechner.png">
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 2rem;
+      line-height: 1.5;
+    }
+    .card {
+      max-width: 520px;
+      border: 1px solid #ccc;
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 1rem;
+    }
+    .row { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+    label { font-weight: 600; }
+    input[type="number"] {
+      width: 120px; padding: 0.5rem; border-radius: 8px; border: 1px solid #bbb;
+    }
+    button {
+      padding: 0.5rem 0.9rem; border-radius: 8px; border: 1px solid #888; cursor: pointer;
+    }
+    .result { margin-top: 0.6rem; font-weight: 600; }
+    small.hint { color: #666; display: block; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+
+  <h1>Zeitrechner</h1>
+
+  <div class="card" id="minToHM">
+    <h2>Minuten → Stunden + Minuten</h2>
+    <div class="row">
+      <label for="minutes">Minuten:</label>
+      <input id="minutes" type="number" min="0" step="1" placeholder="z. B. 135"/>
+      <button id="convertToHM">Umrechnen</button>
+      <button id="clear1" type="button">Leeren</button>
+    </div>
+    <small class="hint">Ganzzahl-Minuten eingeben. Negativwerte werden als absolute Dauer behandelt.</small>
+    <div class="result" id="hmResult"></div>
+  </div>
+
+  <div class="card" id="hmToMin">
+    <h2>Stunden + Minuten → Minuten</h2>
+    <div class="row">
+      <label for="hours">Stunden:</label>
+      <input id="hours" type="number" step="1" placeholder="z. B. 2"/>
+      <label for="mins">Minuten:</label>
+      <input id="mins" type="number" step="1" placeholder="z. B. 15"/>
+      <button id="convertToMin">Umrechnen</button>
+      <button id="clear2" type="button">Leeren</button>
+    </div>
+    <small class="hint">Minuten können >59 sein, werden automatisch auf Stunden umgelegt.</small>
+    <div class="result" id="minResult"></div>
+  </div>
+
+  <script>
+    // Minuten → Stunden + Minuten
+    const minutesInput = document.getElementById('minutes');
+    const hmResult = document.getElementById('hmResult');
+    document.getElementById('convertToHM').addEventListener('click', () => {
+      let m = Number(minutesInput.value);
+      if (!Number.isFinite(m)) { hmResult.textContent = 'Bitte gültige Minuten eingeben.'; return; }
+      const sign = m < 0 ? -1 : 1;
+      m = Math.abs(Math.round(m)); // Dauer, gerundet auf ganze Minuten
+      const h = Math.floor(m / 60);
+      const mins = m % 60;
+      const prefix = sign < 0 ? '−' : '';
+      hmResult.textContent = `${prefix}${h} Stunden ${mins} Minuten`;
+    });
+    document.getElementById('clear1').addEventListener('click', () => {
+      minutesInput.value = '';
+      hmResult.textContent = '';
+    });
+
+    // Stunden + Minuten → Minuten
+    const hoursInput = document.getElementById('hours');
+    const minsInput = document.getElementById('mins');
+    const minResult = document.getElementById('minResult');
+    document.getElementById('convertToMin').addEventListener('click', () => {
+      let h = Number(hoursInput.value);
+      let m = Number(minsInput.value);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) {
+        minResult.textContent = 'Bitte gültige Zahlen eingeben.';
+        return;
+      }
+      // Normierung: negative Werte behandeln, Minuten auf Stunden umlegen
+      const totalMinutes = Math.round(h * 60 + m);
+      const sign = totalMinutes < 0 ? -1 : 1;
+      let absMin = Math.abs(totalMinutes);
+      const normHours = Math.floor(absMin / 60);
+      const normMins = absMin % 60;
+      const displaySign = sign < 0 ? '−' : '';
+      minResult.textContent = `${displaySign}${absMin} Minuten (normiert: ${displaySign}${normHours}h ${normMins}m)`;
+    });
+    document.getElementById('clear2').addEventListener('click', () => {
+      hoursInput.value = '';
+      minsInput.value = '';
+      minResult.textContent = '';
+    });
+  </script>
+</body>
+</html>
