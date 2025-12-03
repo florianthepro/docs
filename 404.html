@@ -2,18 +2,27 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=https://codepen.io/ARiyou2000/embed/VwvMeae?default-tab=html%2Cresult">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
-  <link rel="icon" sizeson" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.orgcheme: light dark; }
+  <style>
     @media (prefers-color-scheme: light) {
-      html,body { background:#fff; margin:0; }
+      html, body { background:#fff; margin:0; }
     }
     @media (prefers-color-scheme: dark) {
-      html,body { background:#121212; margin:0; }
+      html, body { background:#121212; margin:0; }
     }
   </style>
 </head>
-<body></body>
+<body>
+  <div id="iframe-container"></div>
+
+  <script>
+    fetch("iframe.txt")
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById("iframe-container").innerHTML = data;
+      });
+  </script>
+</body>
 </html>
