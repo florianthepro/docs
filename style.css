@@ -1,0 +1,40 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #f8f9fa;
+    color: #333;
+    margin: 20px;
+}
+
+h1 {
+    color: #007acc;
+    margin-bottom: 20px;
+}
+
+ul {
+    list-style-type: none;
+    padding-left: 20px;
+}
+
+li {
+    margin: 5px 0;
+}
+
+li.folder {
+    font-weight: bold;
+    color: #444;
+}
+
+li.file a {
+    text-decoration: none;
+    color: #007acc;
+}
+
+li.file a:hover {
+    text-decoration: underline;
+}
+
+.meta {
+    font-size: 0.9em;
+    color: #666;
+    margin-left: 10px;
+}
