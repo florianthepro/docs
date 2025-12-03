@@ -1,64 +1,8 @@
-<?php
-$baseDir = __DIR__;
-$self    = basename($_SERVER['SCRIPT_NAME']); // aktueller Scriptname
-$scriptDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/'); // z.B. /public-utils
-
-// Funktion zum sicheren Auflisten
-function listDirectory($dir, $self, $baseUrl = '', $scriptDir = '') {
-    $items = scandir($dir);
-
-    echo "<table id='fileTable'>";
-    echo "<tr><th>Name</th><th>Typ</th><th>Größe</th></tr>";
-
-    foreach ($items as $item) {
-        if ($item === '.' || $item === '..') continue;
-        if ($item === $self) continue; // sich selbst ausschließen
-        if (str_starts_with($item, '.')) continue; // Verzeichnisse/Dateien mit "." nicht anzeigen
-
-        $path = $dir . DIRECTORY_SEPARATOR . $item;
-        $url  = $baseUrl . '/' . rawurlencode($item);
-
-        if (is_dir($path)) {
-            echo "<tr>
-                    <td>📁 <a href='?path=" . urlencode($url) . "'>$item</a></td>
-                    <td>Ordner</td>
-                    <td>-</td>
-                  </tr>";
-        } else {
-            $size = filesize($path);
-            $size = number_format($size / 1024, 2) . " KB";
-            // WICHTIG: relativer Link zum Skriptverzeichnis
-            $fileUrl = $scriptDir . '/' . ltrim($url, '/');
-            echo "<tr>
-                    <td>📄 <a href='" . htmlspecialchars($fileUrl) . "' target='_blank'>$item</a></td>
-                    <td>Datei</td>
-                    <td>$size</td>
-                  </tr>";
-        }
-    }
-    echo "</table>";
-}
-
-// Aktuellen Pfad bestimmen
-$path = isset($_GET['path']) ? rawurldecode($_GET['path']) : '';
-$currentDir = realpath($baseDir . DIRECTORY_SEPARATOR . $path);
-
-// Sicherheitscheck
-if ($currentDir === false || strpos($currentDir, $baseDir) !== 0) {
-    die("Ungültiger Pfad.");
-}
-
-// Zugriff auf Dateien, die mit "." beginnen, blockieren
-$basename = basename($currentDir);
-if (str_starts_with($basename, '.')) {
-    die("Zugriff verweigert.");
-}
-?>
 <!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title><?php echo htmlspecialchars($path); ?></title>
+<title>Dateiliste</title>
 <style>
     body {
         font-family: Arial, sans-serif;
@@ -113,15 +57,30 @@ if (str_starts_with($basename, '.')) {
 </style>
 </head>
 <body class="dark">
-    <h2>📂 <?php echo htmlspecialchars($currentDir); ?></h2>
+    <h2>📂 Beispiel-Verzeichnis</h2>
 
-    <?php if ($path !== ''): ?>
-        <a class="back" href="?path=<?php echo urlencode(dirname($path) === '.' ? '' : dirname($path)); ?>">⬅️ Zurück</a>
-    <?php endif; ?>
-
+    <a class="back" href="#">⬅️ Zurück</a>
     <input class="search" type="text" id="searchBox" placeholder="🔍 Dateien filtern...">
 
-    <?php listDirectory($currentDir, $self, $path, $scriptDir); ?>
+    <table id="fileTable">
+        <tr><th>Name</th><th>Typ</th><th>Größe</th></tr>
+        <!-- Manuell gepflegte Einträge -->
+        <tr>
+            <td>📁 <a href="#">Ordner1</a></td>
+            <td>Ordner</td>
+            <td>-</td>
+        </tr>
+        <tr>
+            <td>📄 <a href="beispiel.txt" target="_blank">beispiel.txt</a></td>
+            <td>Datei</td>
+            <td>12 KB</td>
+        </tr>
+        <tr>
+            <td>📄 <a href="bild.png" target="_blank">bild.png</a></td>
+            <td>Datei</td>
+            <td>240 KB</td>
+        </tr>
+    </table>
 
 <script>
 // Darkmode automatisch aktivieren
