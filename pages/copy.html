@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Einfacher Copy-Button</title>
+</head>
+<body>
+  <p id="text">Hallo Welt!</p>
+  <button onclick="copyText()">Copy</button>
+
+  <script>
+    function copyText() {
+      const text = document.getElementById("text").innerText;
+      navigator.clipboard.writeText(text);
+      alert("Text kopiert: " + text);
+    }
+  </script>
+</body>
+</html>
