@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Index</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        margin: 40px;
+        transition: background 0.3s, color 0.3s;
+    }
+    :root {
+        --bg: #f4f6f9;
+        --fg: #333;
+        --link: #0078d7;
+        --table-bg: white;
+    }
+    body.dark {
+        --bg: #1e1e1e;
+        --fg: #ddd;
+        --link: #4aa3ff;
+        --table-bg: #2a2a2a;
+    }
+    h2 { margin-bottom: 10px; }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        background: var(--table-bg);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    th, td {
+        padding: 10px 15px;
+        border-bottom: 1px solid #5553;
+    }
+    th {
+        background: var(--link);
+        color: white;
+        text-align: left;
+    }
+    a {
+        color: var(--link);
+        text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    .back, .search {
+        margin: 10px 10px 20px 0;
+        display: inline-block;
+    }
+    input[type="text"] {
+        padding: 6px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+</style>
+</head>
+<body class="dark">
+    <h2>📂 Verzeichnis</h2>
+
+    <a class="back" href="#">⬅️ Zurück</a>
+    <input class="search" type="text" id="searchBox" placeholder="🔍 Dateien filtern...">
+
+    <table id="fileTable">
+        <tr><th>Name</th><th>Typ</th><th>Größe</th></tr>
+        <!-- Manuell gepflegte Einträge -->
+        <tr>
+            <td>📁 <a href="https://florianthepro.github.io/docs/pages/utils">utils</a></td>
+            <td>Ordner</td>
+            <td>-</td>
+        </tr>
+        <tr>
+            <td>📄 <a href="https://florianthepro.github.io/manual/" target="_blank">manual</a></td>
+            <td>Page</td>
+            <td>-</td>
+        </tr>
+        <tr>
+            <td>📄 <a href="https://florianthepro.github.io/docs/" target="_blank">docs</a></td>
+            <td>Page</td>
+            <td>-</td>
+        </tr>
+    </table>
+
+<script>
+// Darkmode automatisch aktivieren
+document.addEventListener("DOMContentLoaded", () => {
+    document.body.classList.add("dark");
+    localStorage.setItem("theme", "dark");
+});
+
+// Live-Suche
+document.getElementById("searchBox").addEventListener("keyup", function() {
+    let filter = this.value.toLowerCase();
+    let rows = document.querySelectorAll("#fileTable tr");
+    rows.forEach((row, i) => {
+        if (i === 0) return; // Kopfzeile überspringen
+        let text = row.innerText.toLowerCase();
+        row.style.display = text.includes(filter) ? "" : "none";
+    });
+});
+</script>
+</body>
+</html>
